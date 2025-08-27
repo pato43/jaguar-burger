@@ -11,22 +11,23 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from numpy.random import default_rng
 
+# ─────────────────────────── Base y estilos
 st.set_page_config(page_title="Jaguar Burger MX — BI", page_icon="🍔", layout="wide")
-
 st.markdown("""
 <style>
   html, body, [data-testid="stAppViewContainer"] * {font-size: 17px !important;}
   h1 {font-size: 2.1rem !important;} h2 {font-size: 1.6rem !important;} h3 {font-size: 1.25rem !important;}
-  .hero {border-radius:16px; padding:18px 22px; background:linear-gradient(135deg, rgba(255,140,0,.16), rgba(255,255,255,.06)); border:1px solid rgba(255,255,255,.12);}
+  .hero {border-radius:16px; padding:18px 22px; background:linear-gradient(135deg, rgba(255,140,0,.18), rgba(255,255,255,.06)); border:1px solid rgba(255,255,255,.12);}
   .chip {display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .7rem; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.06); margin-right:.5rem;}
   .dot {width:.55rem; height:.55rem; border-radius:50%; background:#2ecc71; display:inline-block; box-shadow:0 0 8px rgba(46,204,113,.85);}
-  .card {border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); border-radius:14px; padding:14px;}
   [data-testid="stSidebar"] {border-right:1px solid rgba(255,255,255,.08);}
   [data-testid="stSidebar"] img {border-radius:10px;}
   .badge-row img {max-height:46px; object-fit:contain;}
+  .note {opacity:.95}
 </style>
 """, unsafe_allow_html=True)
 
+# ─────────────────────────── Assets
 ASSETS = {
     "logo": "assets/logo.png",
     "hero": "assets/hero.jpg",
@@ -58,10 +59,11 @@ def fallback_logo(w=900, h=260, text="Jaguar Burger MX"):
     d.text((tx, cy+36), "Business Intelligence & Analytics", font=f2, fill=(255,255,255,230))
     buf = io.BytesIO(); img.save(buf, format="PNG"); buf.seek(0); return buf
 
-def stream_text(txt, speed=0.01):
+def stream_text(txt, speed=0.012):
     for w in txt.split(" "):
         yield w + " "; time.sleep(speed)
 
+# ─────────────────────────── Datos sintéticos
 PLAZAS = [
     {"estado":"CDMX","ciudad":"Ciudad de México","lat":19.4326,"lon":-99.1332},
     {"estado":"Jalisco","ciudad":"Guadalajara","lat":20.6597,"lon":-103.3496},
@@ -73,7 +75,6 @@ PLAZAS = [
     {"estado":"Guanajuato","ciudad":"León","lat":21.1250,"lon":-101.6850},
     {"estado":"Querétaro","ciudad":"Querétaro","lat":20.5888,"lon":-100.3899},
 ]
-
 @st.cache_data(show_spinner=False)
 def make_year(year=2024, seed=42):
     rng = default_rng(seed); stores=[]; sid=100
@@ -81,12 +82,12 @@ def make_year(year=2024, seed=42):
         for s in range(2):
             stores.append({"store_id":sid,"store_name":f"{p['ciudad']} — Sucursal {s+1}",
                            "estado":p["estado"],"ciudad":p["ciudad"],
-                           "lat":p["lat"]+rng.normal(0,0.02),"lon":p["lon"]+rng.normal(0,0.02),
+                           "lat":float(p["lat"]+rng.normal(0,0.02)),
+                           "lon":float(p["lon"]+rng.normal(0,0.02)),
                            "base_demand":rng.uniform(120,240),"price":rng.uniform(80,120),
                            "cost_rate":rng.uniform(0.55,0.62)}); sid+=1
     idx = pd.date_range(f"{year}-01-01", f"{year}-12-31", freq="D")
-    holidays = {f"{year}-02-14", f"{year}-04-30", f"{year}-05-10", f"{year}-09-16",
-                f"{year}-12-12", f"{year}-12-24", f"{year}-12-25", f"{year}-12-31"}
+    holidays = {f"{year}-02-14", f"{year}-05-10", f"{year}-09-16", f"{year}-12-12", f"{year}-12-24", f"{year}-12-25", f"{year}-12-31"}
     rows=[]
     for s in stores:
         monthly_amp = rng.uniform(0.06,0.18); weekly_amp = rng.uniform(0.12,0.24)
@@ -109,10 +110,13 @@ def make_year(year=2024, seed=42):
             rows.append({"date":d.date(),"store_id":s["store_id"],"store_name":s["store_name"],
                         "estado":s["estado"],"ciudad":s["ciudad"],"lat":s["lat"],"lon":s["lon"],
                         "orders":orders,"price":round(price,2),"discount":discount,
-                        "marketing_mxn":round(marketing,2),"sales_mxn":round(sales,2),
-                        "cogs_mxn":round(cogs,2),"profit_mxn":round(profit,2),
-                        "ticket_avg_mxn":round(ticket,2),"margin_pct":round(margin,4),
-                        "weekday":dow,"month":m,"is_weekend":is_weekend})
+                        "marketing_mxn":round(float(marketing),2),
+                        "sales_mxn":round(float(sales),2),
+                        "cogs_mxn":round(float(cogs),2),
+                        "profit_mxn":round(float(profit),2),
+                        "ticket_avg_mxn":round(float(ticket),2),
+                        "margin_pct":round(float(margin),4),
+                        "weekday":int(dow),"month":int(m),"is_weekend":int(is_weekend)})
     df = pd.DataFrame(rows)
     thr = df.groupby("store_id")["orders"].transform(lambda s: s.quantile(0.75))
     df["high_demand"] = (df["orders"]>=thr).astype(int)
@@ -125,6 +129,7 @@ ALL_STATES = sorted(DATA["estado"].unique().tolist())
 ALL_STORES = DATA[["store_id","store_name"]].drop_duplicates().sort_values("store_name")
 names = ALL_STORES["store_name"].tolist()
 
+# ─────────────────────────── Sidebar minimalista
 with st.sidebar:
     lg = asset(ASSETS["logo"])
     st.image(lg or fallback_logo(), caption="Jaguar Burger MX", use_container_width=True)
@@ -141,17 +146,19 @@ F = DATA[(DATA["estado"].isin(estados)) & (DATA["store_name"].isin(store_sel)) &
          (DATA["date"]>=start_date) & (DATA["date"]<=end_date)].copy()
 if F.empty: F = DATA.copy()
 
+# ─────────────────────────── Encabezado con “estado de conexión”
 st.markdown("## Jaguar Burger MX — Plataforma de Ventas & Analytics")
-status = st.columns(4)
+status = st.columns(5)
 with status[0]: st.markdown('<span class="chip"><span class="dot"></span> Conectado a Snowflake</span>', unsafe_allow_html=True)
-with status[1]: st.markdown('<span class="chip"><span class="dot"></span> Gemini ADK listo</span>', unsafe_allow_html=True)
-with status[2]: st.markdown('<span class="chip"><span class="dot"></span> PyDeck activo</span>', unsafe_allow_html=True)
-with status[3]: st.markdown('<span class="chip"><span class="dot"></span> UI en tiempo real</span>', unsafe_allow_html=True)
+with status[1]: st.markdown('<span class="chip"><span class="dot"></span> Gemini ADK activo</span>', unsafe_allow_html=True)
+with status[2]: st.markdown('<span class="chip"><span class="dot"></span> PyDeck OK</span>', unsafe_allow_html=True)
+with status[3]: st.markdown('<span class="chip"><span class="dot"></span> Plotly listo</span>', unsafe_allow_html=True)
+with status[4]: st.markdown('<span class="chip"><span class="dot"></span> Streamlit Live</span>', unsafe_allow_html=True)
 
 st.markdown("""
 <div class="hero">
-<b>Propósito:</b> visibilizar desempeño de ventas y rentabilidad por sucursal, explicar resultados y detectar oportunidades.
-<br/><b>Qué incluye:</b> KPIs con microtendencias, exploración temporal/tienda/estado, panel de modelos, clusters y mapa operativo con calor de ventas.
+<b>Propósito:</b> visibilizar desempeño de ventas y rentabilidad por sucursal, explicar resultados con apoyo analítico y detectar oportunidades.
+<br/><b>Incluye:</b> KPIs con microtendencias, exploración por mes/tienda/estado, modelos, clusters y mapa operativo con calor de ventas.
 </div>
 """, unsafe_allow_html=True)
 
@@ -163,10 +170,12 @@ cols = st.columns(len(ASSETS["tech"]))
 for c, (label, path) in zip(cols, ASSETS["tech"].items()):
     c.image(asset(path) or (lg or fallback_logo()), caption=label, use_container_width=True)
 
+# ─────────────────────────── Tabs
 tab_kpi, tab_explore, tab_models, tab_cluster, tab_map = st.tabs(
     ["📈 KPIs", "📊 Exploración", "🤖 Modelos", "🧩 Clustering", "🗺️ Mapa"]
 )
 
+# ─────────────────────────── KPIs
 with tab_kpi:
     last_90 = F.sort_values("date").tail(90)
     prev_90 = F.sort_values("date").iloc[-180:-90] if len(F) >= 180 else F.head(0)
@@ -185,27 +194,27 @@ with tab_kpi:
     m1.metric("Ventas 90d (MXN)", f"{sales_now:,.0f}", round(sales_now - sales_prev, 2), chart_data=t_sales,  chart_type="area", border=True)
     m2.metric("Pedidos 90d",       f"{orders_now:,}",   orders_now - orders_prev,        chart_data=t_orders, chart_type="bar",  border=True)
     m3.metric("Margen % 90d",      f"{margin_now:,.1f}%", f"{(margin_now - margin_prev):+.2f} pp", chart_data=t_margin, chart_type="line", border=True)
-    st.write_stream(stream_text("🧠 Explicación Gemini: KPIs con tendencia de 90 días. La variación de margen suele relacionarse con promociones y mix de productos."))
+    st.write_stream(stream_text("🧠 Explicación Gemini: KPIs con tendencia de 90 días; el margen suele moverse con promociones y mix de ticket."))
 
-    a, b = st.columns([1.25, 1])
+    a, b = st.columns([1.3, 1])
     with a:
         by_month = F.assign(yyyy_mm=lambda d: d["date"].astype(str).str.slice(0,7)).groupby("yyyy_mm")["sales_mxn"].sum().reset_index()
         fig = px.bar(by_month, x="yyyy_mm", y="sales_mxn", labels={"yyyy_mm":"Mes","sales_mxn":"Ventas (MXN)"})
         st.plotly_chart(fig, use_container_width=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: evolución mensual para reconocer estacionalidad y efectos de campañas."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: evolución mensual para detectar estacionalidad y efectos de campañas."))
     with b:
         by_state = F.groupby("estado")["sales_mxn"].sum().reset_index().sort_values("sales_mxn", ascending=False)
         fig2 = px.pie(by_state, values="sales_mxn", names="estado", hole=0.55)
         st.plotly_chart(fig2, use_container_width=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: participación por estado guía la asignación de presupuesto y cobertura."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: participación por estado guía la inversión y cobertura."))
 
-    c, d = st.columns([1.25,1])
+    c, d = st.columns([1.3,1])
     with c:
         piv = F.pivot_table(index="weekday", columns="month", values="sales_mxn", aggfunc="sum").fillna(0)
         fig3 = go.Figure(data=go.Heatmap(z=piv.values, x=piv.columns, y=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"]))
         fig3.update_layout(title="Día de semana vs Mes", height=360)
         st.plotly_chart(fig3, use_container_width=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: el mapa de calor revela picos operativos por día y mes."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: el calor de ventas revela picos operativos por día y mes."))
     with d:
         kpi_tbl = (F.groupby("store_name").agg(ventas=("sales_mxn","sum"),
                                                pedidos=("orders","sum"),
@@ -213,8 +222,26 @@ with tab_kpi:
                                                ticket=("ticket_avg_mxn","mean"))
                    .reset_index().sort_values("ventas", ascending=False).head(10))
         st.dataframe(kpi_tbl, use_container_width=True, hide_index=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: Top tiendas para benchmarking interno de ticket y margen."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: top sucursales para benchmarking de ticket y margen."))
 
+    e, f = st.columns([1.3,1])
+    with e:
+        series = (F.assign(yyyy_mm=lambda d: d["date"].astype(str).str.slice(0,7))
+                    .groupby("yyyy_mm")[["profit_mxn","marketing_mxn"]].sum().reset_index())
+        fig4 = go.Figure()
+        fig4.add_trace(go.Scatter(x=series["yyyy_mm"], y=series["profit_mxn"], mode="lines+markers", name="Utilidad"))
+        fig4.add_trace(go.Scatter(x=series["yyyy_mm"], y=series["marketing_mxn"], mode="lines+markers", name="Marketing"))
+        fig4.update_layout(title="Utilidad vs Marketing (mensual)")
+        st.plotly_chart(fig4, use_container_width=True)
+        st.write_stream(stream_text("🧠 Explicación Gemini: balance entre inversión y resultado; desalineaciones indican oportunidad."))
+    with f:
+        cor = F[["orders","price","discount","marketing_mxn","sales_mxn","profit_mxn","ticket_avg_mxn","margin_pct"]].corr(numeric_only=True)
+        fig5 = go.Figure(data=go.Heatmap(z=cor.values, x=cor.columns, y=cor.columns, zmin=-1, zmax=1))
+        fig5.update_layout(title="Correlaciones")
+        st.plotly_chart(fig5, use_container_width=True)
+        st.write_stream(stream_text("🧠 Explicación Gemini: correlaciones para entender relaciones clave entre variables."))
+
+# ─────────────────────────── Exploración
 with tab_explore:
     subtab = st.tabs(["Por Mes", "Por Tienda", "Por Estado", "Distribuciones", "Descomposición"])
     with subtab[0]:
@@ -223,11 +250,11 @@ with tab_explore:
                     ventas=("sales_mxn","sum"), pedidos=("orders","sum"),
                     marketing=("marketing_mxn","sum"), utilidades=("profit_mxn","sum"),
                     margen=("margin_pct","mean"), ticket=("ticket_avg_mxn","mean")).reset_index())
-        g1, g2 = st.columns([1.25,1])
+        g1, g2 = st.columns([1.3,1])
         with g1:
-            fig = px.line(dfm, x="yyyy_mm", y="ventas", markers=True)
+            fig = px.area(dfm, x="yyyy_mm", y="ventas")
             st.plotly_chart(fig, use_container_width=True)
-            st.write_stream(stream_text("🧠 Explicación Gemini: ingresos mensuales y continuidad de crecimiento."))
+            st.write_stream(stream_text("🧠 Explicación Gemini: ingresos mensuales con área para remarcar magnitud y tendencia."))
         with g2:
             st.dataframe(dfm, use_container_width=True, hide_index=True)
             st.write_stream(stream_text("🧠 Explicación Gemini: tabla mensual con pedidos, marketing, utilidad, margen y ticket."))
@@ -236,12 +263,12 @@ with tab_explore:
                 ventas=("sales_mxn","sum"), pedidos=("orders","sum"),
                 marketing=("marketing_mxn","sum"), utilidades=("profit_mxn","sum"),
                 margen=("margin_pct","mean"), ticket=("ticket_avg_mxn","mean")).reset_index())
-        t1, t2 = st.columns([1.25,1])
+        t1, t2 = st.columns([1.3,1])
         with t1:
             fig = px.bar(dft.sort_values("ventas", ascending=False).head(20), x="store_name", y="ventas", hover_data=["estado","ciudad"])
             fig.update_layout(xaxis_title="Sucursal", yaxis_title="Ventas (MXN)")
             st.plotly_chart(fig, use_container_width=True)
-            st.write_stream(stream_text("🧠 Explicación Gemini: ranking de sucursales y oportunidades de mejora."))
+            st.write_stream(stream_text("🧠 Explicación Gemini: ranking de sucursales y focos de crecimiento."))
         with t2:
             st.dataframe(dft.sort_values("ventas", ascending=False), use_container_width=True, hide_index=True)
             st.write_stream(stream_text("🧠 Explicación Gemini: tabla completa para exportación y filtros."))
@@ -249,7 +276,7 @@ with tab_explore:
         dfs = (F.groupby("estado").agg(
                 ventas=("sales_mxn","sum"), pedidos=("orders","sum"),
                 utilidades=("profit_mxn","sum"), margen=("margin_pct","mean")).reset_index())
-        s1, s2 = st.columns([1.25,1])
+        s1, s2 = st.columns([1.3,1])
         with s1:
             fig = px.bar(dfs.sort_values("ventas", ascending=False), x="estado", y="ventas")
             fig.update_layout(xaxis_title="Estado", yaxis_title="Ventas (MXN)")
@@ -259,11 +286,11 @@ with tab_explore:
             st.dataframe(dfs.sort_values("ventas", ascending=False), use_container_width=True, hide_index=True)
             st.write_stream(stream_text("🧠 Explicación Gemini: cifras agregadas por estado."))
     with subtab[3]:
-        dx1, dx2 = st.columns([1.25,1])
+        dx1, dx2 = st.columns([1.3,1])
         with dx1:
             fig = px.histogram(F, x="ticket_avg_mxn", nbins=30, marginal="box")
             st.plotly_chart(fig, use_container_width=True)
-            st.write_stream(stream_text("🧠 Explicación Gemini: distribución del ticket promedio para detectar colas y outliers."))
+            st.write_stream(stream_text("🧠 Explicación Gemini: distribución de ticket para detectar colas y outliers."))
         with dx2:
             fig = px.scatter(F, x="marketing_mxn", y="sales_mxn", trendline="ols")
             st.plotly_chart(fig, use_container_width=True)
@@ -276,8 +303,9 @@ with tab_explore:
             y=[totals["sales_mxn"], -totals["cogs_mxn"], -totals["marketing_mxn"], totals["profit_mxn"]],
         ))
         st.plotly_chart(wf, use_container_width=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: descomposición del resultado — puente Ventas → Utilidad."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: puente Ventas → Utilidad para entender impactos."))
 
+# ─────────────────────────── Modelos (presentación)
 with tab_models:
     colA, colB = st.columns(2)
     with colA:
@@ -289,10 +317,10 @@ with tab_models:
         fig = px.scatter(x=real, y=pred, labels={"x":"Real","y":"Predicho"})
         fig.add_trace(go.Scatter(x=[vmin, vmax], y=[vmin, vmax], mode="lines", name="45°"))
         st.plotly_chart(fig, use_container_width=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: ajuste del modelo de regresión — la cercanía a la línea 45° indica buena calibración."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: la cercanía a la línea 45° indica buena calibración del modelo de regresión."))
         st.dataframe(pd.DataFrame({"Muestra": np.arange(1, 21), "Real": real[:20].round(0).astype(int), "Predicho": pred[:20].round(0).astype(int)}),
                      use_container_width=True, hide_index=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: tabla de inspección rápida de predicciones."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: muestra de predicciones para inspección puntual."))
     with colB:
         st.markdown("**Clasificación de días de alta demanda**")
         total = 500
@@ -302,14 +330,15 @@ with tab_models:
         fig_cm = go.Figure(data=go.Heatmap(z=cm, x=["Pred 0","Pred 1"], y=["Real 0","Real 1"], text=cm, texttemplate="%{text}"))
         fig_cm.update_layout(height=320)
         st.plotly_chart(fig_cm, use_container_width=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: matriz de confusión para entender aciertos/errores."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: matriz de confusión para entender aciertos y errores del clasificador."))
         fpr = np.linspace(0,1,120); tpr = np.clip(fpr**0.6 + default_rng().normal(0,0.03,120), 0, 1)
         froc = go.Figure(); froc.add_trace(go.Scatter(x=fpr,y=tpr, mode="lines", name="ROC"))
         froc.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines", name="Azar"))
         froc.update_layout(height=280, title="Curva ROC")
         st.plotly_chart(froc, use_container_width=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: capacidad discriminativa del clasificador a distintos umbrales."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: capacidad discriminativa a distintos umbrales."))
 
+# ─────────────────────────── Clustering
 with tab_cluster:
     agg = (F.groupby(["store_id","store_name","estado","ciudad","lat","lon"])
              .agg(ventas=("sales_mxn","sum"), margen=("margin_pct","mean"), ticket=("ticket_avg_mxn","mean")).reset_index())
@@ -323,7 +352,7 @@ with tab_cluster:
         y = (agg["margen"]  / agg["margen"].max()).values
         agg["pc1"] = x*1.2 + default_rng().normal(0, .06, len(x))
         agg["pc2"] = y*1.1 + default_rng().normal(0, .06, len(y))
-        c1, c2 = st.columns([1.25,1])
+        c1, c2 = st.columns([1.3,1])
         with c1:
             fig = px.scatter(agg, x="pc1", y="pc2", color=agg["cluster"].astype(str),
                              hover_data=["store_name","ventas","margen","ticket"], labels={"color":"Cluster"})
@@ -335,6 +364,7 @@ with tab_cluster:
                          use_container_width=True, hide_index=True)
             st.write_stream(stream_text("🧠 Explicación Gemini: perfiles por cluster con métricas clave."))
 
+# ─────────────────────────── Mapa (con puntos garantizados)
 with tab_map:
     stores_latest = (F.groupby(["store_id","store_name","estado","ciudad","lat","lon"])
                        .agg(ventas=("sales_mxn","sum"), pedidos=("orders","sum"),
@@ -342,51 +372,62 @@ with tab_map:
     if stores_latest.empty:
         st.info("No hay datos con los filtros actuales.")
     else:
+        stores_latest = stores_latest.dropna(subset=["lat","lon"])
         vmax = max(stores_latest["ventas"].max(), 1.0)
         stores_latest["ventas_label"] = stores_latest["ventas"].apply(lambda x: f"MXN {x:,.0f}")
-        stores_latest["size_px"] = (stores_latest["ventas"]/vmax*20 + 8).clip(8, 32)
-
+        stores_latest["size_px"] = (stores_latest["ventas"]/vmax*22 + 10).clip(10, 36).astype(float)
         scatter = pdk.Layer(
             "ScatterplotLayer",
-            data=stores_latest,
-            get_position="[lon, lat]",
+            data=stores_latest.to_dict("records"),
+            get_position=["lon","lat"],
             get_radius="size_px",
             radius_units="pixels",
-            radius_scale=1,
-            get_fill_color="[0, 220, 140]",
-            get_line_color="[0, 80, 60]",
+            get_fill_color=[0, 220, 140],
+            get_line_color=[0, 80, 60],
             line_width_min_pixels=1,
             pickable=True,
             auto_highlight=True,
         )
         text = pdk.Layer(
             "TextLayer",
-            data=stores_latest,
-            get_position="[lon, lat]",
+            data=stores_latest.to_dict("records"),
+            get_position=["lon","lat"],
             get_text="store_name",
-            get_color="[255,255,255]",
-            get_size=10,
-            get_alignment_baseline="'top'",
+            get_color=[255,255,255],
+            get_size=12,
+            get_alignment_baseline="top",
+        )
+        columns = pdk.Layer(
+            "ColumnLayer",
+            data=stores_latest.to_dict("records"),
+            get_position=["lon","lat"],
+            get_elevation="ventas",
+            elevation_scale=0.0005,
+            radius=8000,
+            extruded=True,
+            get_fill_color=[255, 140, 0],
+            pickable=True,
         )
         heat = pdk.Layer(
             "HeatmapLayer",
-            data=stores_latest,
-            get_position="[lon, lat]",
+            data=stores_latest.to_dict("records"),
+            get_position=["lon","lat"],
             aggregation="SUM",
             get_weight="ventas",
             radius_pixels=50,
         )
-        view_state = pdk.ViewState(latitude=23.6, longitude=-102.5, zoom=4.2, pitch=30, bearing=0)
-        deck = pdk.Deck(layers=[heat, scatter, text], initial_view_state=view_state,
+        view_state = pdk.ViewState(latitude=23.6, longitude=-102.5, zoom=4.4, pitch=30, bearing=0)
+        deck = pdk.Deck(layers=[heat, columns, scatter, text],
+                        initial_view_state=view_state,
                         tooltip={"text":"{store_name}\n{estado} — {ciudad}\nVentas: {ventas_label}"})
         st.pydeck_chart(deck, use_container_width=True)
-        st.write_stream(stream_text("🧠 Explicación Gemini: puntos verdes escalados por ventas y calor de concentración geográfica."))
+        st.write_stream(stream_text("🧠 Explicación Gemini: puntos y columnas 3D escalan con ventas; la capa de calor resalta concentración geográfica."))
 
-        m1, m2 = st.columns([1.25,1])
+        m1, m2 = st.columns([1.3,1])
         with m1:
             top_geo = stores_latest.sort_values("ventas", ascending=False)[["store_name","estado","ciudad","ventas","margen","ticket"]].head(15)
             st.dataframe(top_geo, use_container_width=True, hide_index=True)
-            st.write_stream(stream_text("🧠 Explicación Gemini: Top sucursales por ventas con margen y ticket."))
+            st.write_stream(stream_text("🧠 Explicación Gemini: top sucursales por ventas con margen y ticket."))
         with m2:
             geo_state = stores_latest.groupby("estado")["ventas"].sum().reset_index().sort_values("ventas", ascending=False)
             fig = px.bar(geo_state, x="estado", y="ventas")
@@ -394,5 +435,6 @@ with tab_map:
             st.plotly_chart(fig, use_container_width=True)
             st.write_stream(stream_text("🧠 Explicación Gemini: contribución estatal a partir de agregados geoespaciales."))
 
+# ─────────────────────────── Descarga
 csv = F.to_csv(index=False).encode("utf-8")
 st.download_button("Descargar detalle (CSV)", csv, file_name="jaguar_burger_detalle.csv", mime="text/csv")
